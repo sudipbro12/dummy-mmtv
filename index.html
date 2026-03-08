@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+<title>MyMate-TV — Random Video Chat</title>
+<meta name="description" content="Random video chat with real people. No signup needed."/>
+<meta name="theme-color" content="#0d0d14"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --bg:      #0d0d14;
+  --bg2:     #13131f;
+  --bg3:     #1a1a2e;
+  --accent:  #ff2d55;
+  --accent2: #ff6b6b;
+  --cyan:    #00f5d4;
+  --purple:  #7c3aed;
+  --green:   #22c55e;
+  --text:    #f0f0f8;
+  --muted:   rgba(240,240,248,.45);
+  --border:  rgba(255,255,255,.07);
+  --glow:    rgba(255,45,85,.25);
+  --nav-h:   62px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:'DM Mono',monospace;
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  overflow-x:hidden;
+  -webkit-tap-highlight-color:transparent;
+}
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-thumb{background:var(--accent);border-radius:10px}
+
+/* ── NOISE OVERLAY ── */
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events:none;z-index:0;opacity:.6;
+}
+
+/* ── SPLASH ── */
+#splash{
+  position:fixed;inset:0;z-index:9999;
+  background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.2rem;
+  transition:opacity .5s;
+}
+#splash.out{opacity:0;pointer-events:none}
+.splash-logo{
+  font-family:'Syne',sans-serif;font-size:2.2rem;font-weight:800;
+  background:linear-gradient(135deg,var(--accent),var(--cyan));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  letter-spacing:-.02em;
+}
+.splash-sub{color:var(--muted);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase}
+.splash-bar-wrap{width:120px;height:2px;background:rgba(255,255,255,.08);border-radius:50px;overflow:hidden}
+.splash-bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--cyan));animation:loadBar 1.6s ease forwards}
+@keyframes loadBar{from{width:0}to{width:100%}}
+
+/* ── HEADER ── */
+.header{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  height:56px;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 1.2rem;
+  background:rgba(13,13,20,.85);
+  backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+}
+.logo{
+  font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;
+  background:linear-gradient(135deg,var(--accent),var(--cyan));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  text-decoration:none;letter-spacing:-.01em;
+}
+.header-right{display:flex;align-items:center;gap:.7rem}
+.online-pill{
+  display:flex;align-items:center;gap:.4rem;
+  background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);
+  border-radius:50px;padding:.28rem .75rem;font-size:.7rem;color:#4ade80;font-weight:500;
+}
+.online-dot{width:6px;height:6px;border-radius:50%;background:#4ade80;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.back-btn{
+  display:flex;align-items:center;gap:.4rem;
+  color:var(--muted);font-size:.78rem;text-decoration:none;
+  background:rgba(255,255,255,.05);border:1px solid var(--border);
+  border-radius:50px;padding:.3rem .8rem;transition:.2s;
+}
+.back-btn:hover{color:var(--text);border-color:rgba(255,255,255,.15)}
+.user-chip{
+  display:flex;align-items:center;gap:.5rem;
+  background:rgba(255,255,255,.05);border:1px solid var(--border);
+  border-radius:50px;padding:.28rem .75rem .28rem .28rem;font-size:.75rem;
+}
+.user-av{width:24px;height:24px;border-radius:50%;object-fit:cover;border:1px solid var(--border)}
+.user-av-ph{width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--purple));display:flex;align-items:center;justify-content:center;font-size:.65rem}
+
+/* ── LANDING ── */
+#landing{
+  min-height:100vh;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:80px 1.5rem 2rem;
+  position:relative;z-index:1;
+  text-align:center;
+}
+.landing-glow{
+  position:absolute;
+  width:500px;height:500px;
+  background:radial-gradient(circle,rgba(255,45,85,.12) 0%,transparent 70%);
+  top:50%;left:50%;transform:translate(-50%,-60%);
+  pointer-events:none;
+}
+.landing-glow2{
+  position:absolute;
+  width:300px;height:300px;
+  background:radial-gradient(circle,rgba(0,245,212,.07) 0%,transparent 70%);
+  bottom:10%;right:10%;
+  pointer-events:none;
+}
+.tag-pill{
+  display:inline-flex;align-items:center;gap:.45rem;
+  background:rgba(255,45,85,.08);border:1px solid rgba(255,45,85,.2);
+  border-radius:50px;padding:.32rem 1rem;font-size:.72rem;color:var(--accent2);
+  margin-bottom:1.6rem;letter-spacing:.06em;text-transform:uppercase;
+}
+.tag-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);animation:pulse 1.2s infinite}
+.landing-title{
+  font-family:'Syne',sans-serif;font-size:clamp(2.4rem,8vw,4.5rem);
+  font-weight:800;line-height:1.05;letter-spacing:-.03em;
+  margin-bottom:1rem;
+}
+.landing-title .hl{
+  background:linear-gradient(135deg,var(--accent),var(--cyan));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.landing-sub{
+  color:var(--muted);font-size:clamp(.85rem,2vw,.98rem);
+  line-height:1.8;max-width:420px;margin-bottom:2.2rem;
+  font-family:'DM Mono',monospace;
+}
+.start-btn{
+  position:relative;overflow:hidden;
+  background:linear-gradient(135deg,var(--accent),#c9184a);
+  border:none;color:white;
+  padding:1rem 2.8rem;border-radius:50px;
+  font-size:1rem;font-weight:600;font-family:'Syne',sans-serif;
+  cursor:pointer;letter-spacing:.02em;
+  box-shadow:0 8px 32px rgba(255,45,85,.35);
+  transition:.25s cubic-bezier(.34,1.56,.64,1);
+}
+.start-btn:hover{transform:translateY(-3px) scale(1.03);box-shadow:0 14px 40px rgba(255,45,85,.45)}
+.start-btn:active{transform:scale(.96)}
+.start-btn::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,transparent,rgba(255,255,255,.15),transparent);
+  transform:translateX(-100%);transition:.4s;
+}
+.start-btn:hover::after{transform:translateX(100%)}
+.feat-grid{
+  display:flex;gap:.7rem;flex-wrap:wrap;justify-content:center;
+  margin-top:2.5rem;
+}
+.feat-item{
+  background:rgba(255,255,255,.04);border:1px solid var(--border);
+  border-radius:12px;padding:.6rem 1rem;font-size:.75rem;
+  color:var(--muted);display:flex;align-items:center;gap:.4rem;
+  transition:.2s;
+}
+.feat-item:hover{border-color:rgba(255,45,85,.25);color:var(--text)}
+.guest-note{
+  margin-top:1.4rem;font-size:.72rem;color:var(--muted);
+  display:flex;align-items:center;gap:.4rem;justify-content:center;
+}
+.guest-note a{color:var(--accent2);text-decoration:none;transition:.2s}
+.guest-note a:hover{color:var(--accent)}
+
+/* ── TV ROOM ── */
+#tv-room{
+  display:none;
+  position:fixed;inset:0;z-index:50;
+  flex-direction:column;
+  background:var(--bg);
+  padding-top:56px;
+}
+#tv-room.open{display:flex}
+
+.videos-wrap{
+  flex:1;min-height:0;
+  display:grid;grid-template-columns:1fr 1fr;
+  gap:3px;background:var(--bg);
+  position:relative;
+}
+.vid-box{
+  position:relative;overflow:hidden;
+  background:var(--bg2);
+}
+.vid-box video{width:100%;height:100%;object-fit:cover;display:block}
+.vid-ph{
+  width:100%;height:100%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:.6rem;
+  background:linear-gradient(135deg,var(--bg2),var(--bg3));
+}
+.vid-ph-icon{font-size:2.8rem;opacity:.4}
+.vid-ph-text{font-size:.72rem;color:var(--muted);letter-spacing:.08em}
+.vid-label{
+  position:absolute;bottom:10px;left:12px;
+  background:rgba(0,0,0,.55);backdrop-filter:blur(8px);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:50px;padding:.22rem .7rem;
+  font-size:.68rem;color:rgba(255,255,255,.7);letter-spacing:.06em;
+}
+.vid-online-badge{
+  position:absolute;top:10px;right:10px;
+  background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);
+  border-radius:50px;padding:.2rem .6rem;
+  font-size:.65rem;color:#4ade80;display:flex;align-items:center;gap:.3rem;
+}
+
+/* waiting overlay */
+.waiting-overlay{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:.9rem;
+  background:rgba(13,13,20,.82);backdrop-filter:blur(10px);
+  z-index:5;
+}
+.waiting-ring{
+  width:48px;height:48px;border-radius:50%;
+  border:2px solid rgba(255,45,85,.15);
+  border-top-color:var(--accent);
+  animation:spin .9s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.waiting-text{font-size:.8rem;color:var(--muted);letter-spacing:.08em}
+
+/* status bar */
+.status-bar{
+  background:rgba(13,13,20,.9);backdrop-filter:blur(8px);
+  border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+  padding:.35rem 1rem;
+  display:flex;align-items:center;justify-content:space-between;
+  font-size:.72rem;color:var(--muted);letter-spacing:.05em;flex-shrink:0;
+}
+.status-indicator{display:flex;align-items:center;gap:.4rem}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(--muted)}
+.status-dot.connected{background:var(--green);box-shadow:0 0 6px var(--green)}
+.status-dot.searching{background:var(--accent);animation:pulse 1s infinite}
+.timer-display{font-family:'DM Mono',monospace;color:var(--cyan);font-size:.72rem}
+
+/* chat */
+.chat-panel{
+  height:100px;flex-shrink:0;
+  background:rgba(13,13,20,.95);
+  border-top:1px solid var(--border);
+  display:flex;flex-direction:column;
+}
+.chat-msgs{
+  flex:1;overflow-y:auto;padding:.5rem .8rem;
+  display:flex;flex-direction:column;gap:.2rem;
+  scrollbar-width:none;
+}
+.chat-msgs::-webkit-scrollbar{display:none}
+.chat-msg{font-size:.75rem;line-height:1.45;color:rgba(255,255,255,.7)}
+.chat-msg .msg-name{font-weight:500;margin-right:.3rem}
+.chat-msg .msg-name.me{color:var(--cyan)}
+.chat-msg .msg-name.them{color:var(--accent2)}
+.chat-msg.system{color:rgba(255,255,255,.25);font-style:italic;text-align:center;font-size:.68rem}
+.chat-input-row{
+  display:flex;gap:.4rem;padding:.4rem .7rem;
+  border-top:1px solid var(--border);
+}
+.chat-input{
+  flex:1;background:rgba(255,255,255,.05);
+  border:1px solid var(--border);border-radius:8px;
+  padding:.38rem .8rem;color:var(--text);font-size:.8rem;
+  font-family:'DM Mono',monospace;outline:none;transition:.2s;
+}
+.chat-input::placeholder{color:rgba(255,255,255,.2)}
+.chat-input:focus{border-color:rgba(255,45,85,.4);background:rgba(255,255,255,.07)}
+.chat-send-btn{
+  background:var(--accent);border:none;border-radius:8px;
+  width:32px;height:32px;color:white;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:.2s;flex-shrink:0;
+}
+.chat-send-btn:hover{background:#ff4d6d}
+.chat-send-btn:active{transform:scale(.88)}
+
+/* controls */
+.controls{
+  background:var(--bg2);
+  border-top:1px solid var(--border);
+  padding:.55rem .8rem;padding-bottom:max(.55rem,env(safe-area-inset-bottom));
+  display:flex;gap:.45rem;align-items:center;justify-content:center;
+  flex-shrink:0;flex-wrap:nowrap;
+}
+.ctrl-btn{
+  display:flex;flex-direction:column;align-items:center;gap:.18rem;
+  background:rgba(255,255,255,.05);
+  border:1px solid var(--border);
+  border-radius:12px;padding:.5rem .75rem;
+  color:rgba(255,255,255,.6);font-size:.6rem;
+  cursor:pointer;transition:.18s;min-width:54px;
+  font-family:'DM Mono',monospace;letter-spacing:.04em;
+}
+.ctrl-btn svg{width:18px;height:18px}
+.ctrl-btn:hover{background:rgba(255,255,255,.09);color:var(--text)}
+.ctrl-btn:active{transform:scale(.9)}
+.ctrl-btn.active{background:rgba(255,45,85,.15);border-color:rgba(255,45,85,.35);color:var(--accent2)}
+.ctrl-next{
+  background:linear-gradient(135deg,rgba(255,45,85,.2),rgba(124,58,237,.2));
+  border-color:rgba(255,45,85,.3);color:white;font-weight:600;
+}
+.ctrl-next:hover{background:linear-gradient(135deg,rgba(255,45,85,.35),rgba(124,58,237,.35))}
+.ctrl-end{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.25);color:#f87171}
+.ctrl-end:hover{background:rgba(239,68,68,.25)}
+
+/* ── TOAST ── */
+.toast{
+  position:fixed;bottom:80px;left:50%;
+  transform:translateX(-50%) translateY(12px);
+  background:rgba(30,30,40,.95);backdrop-filter:blur(12px);
+  border:1px solid var(--border);
+  color:var(--text);padding:.6rem 1.2rem;
+  border-radius:50px;font-size:.78rem;
+  z-index:999;opacity:0;transition:.25s;
+  pointer-events:none;white-space:nowrap;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── PERMISSION ERROR ── */
+.perm-screen{
+  flex:1;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:2rem;text-align:center;gap:1rem;
+}
+.perm-icon{font-size:3rem;opacity:.6}
+.perm-title{font-family:'Syne',sans-serif;font-size:1.3rem;font-weight:700}
+.perm-sub{color:var(--muted);font-size:.83rem;line-height:1.7;max-width:280px}
+.perm-btn{
+  background:var(--accent);border:none;color:white;
+  padding:.75rem 2rem;border-radius:50px;
+  font-size:.88rem;font-weight:600;cursor:pointer;
+  font-family:'Syne',sans-serif;
+  box-shadow:0 4px 18px rgba(255,45,85,.3);transition:.2s;
+}
+.perm-btn:hover{transform:translateY(-2px)}
+
+@media(max-width:480px){
+  .landing-title{font-size:clamp(2rem,10vw,3rem)}
+  .feat-grid{gap:.5rem}
+}
+/* ── AGE GATE ── */
+#age-gate{
+  position:fixed;inset:0;z-index:9998;
+  background:rgba(0,0,0,.75);backdrop-filter:blur(12px);
+  display:none;align-items:center;justify-content:center;padding:1.5rem;
+}
+#age-gate.show{display:flex}
+.age-card{
+  background:var(--bg2);border:1px solid rgba(255,45,85,.25);
+  border-radius:20px;padding:2rem 1.8rem;text-align:center;
+  max-width:340px;width:100%;
+  box-shadow:0 24px 60px rgba(255,45,85,.15);
+}
+.age-icon{font-size:2.6rem;margin-bottom:.8rem}
+.age-title{font-family:'Syne',sans-serif;font-size:1.25rem;font-weight:800;margin-bottom:.5rem}
+.age-sub{color:var(--muted);font-size:.8rem;line-height:1.7;margin-bottom:1.5rem}
+.age-btns{display:flex;gap:.6rem;justify-content:center}
+.age-yes{
+  background:linear-gradient(135deg,var(--accent),#c9184a);
+  border:none;color:white;padding:.7rem 1.8rem;
+  border-radius:50px;font-size:.88rem;font-weight:600;
+  font-family:'Syne',sans-serif;cursor:pointer;
+  box-shadow:0 4px 16px rgba(255,45,85,.3);transition:.2s;
+}
+.age-yes:hover{transform:translateY(-2px)}
+.age-no{
+  background:rgba(255,255,255,.06);border:1px solid var(--border);
+  color:var(--muted);padding:.7rem 1.8rem;
+  border-radius:50px;font-size:.88rem;cursor:pointer;
+  font-family:'DM Mono',monospace;transition:.2s;
+}
+.age-no:hover{background:rgba(255,255,255,.1);color:var(--text)}
+</style>
+</head>
+<body>
+
+<!-- SPLASH -->
+<div id="splash">
+  <div class="splash-logo">MyMate-TV</div>
+  <div class="splash-sub">random video chat</div>
+  <div class="splash-bar-wrap"><div class="splash-bar"></div></div>
+</div>
+
+<!-- HEADER -->
+<header class="header">
+  <a href="https://matefinder-in.us.cc" class="logo">MyMate-TV</a>
+  <div class="header-right">
+    <div class="online-pill"><span class="online-dot"></span><span id="online-count">0 online</span></div>
+    <div id="user-chip-wrap"></div>
+    <a href="https://matefinder-in.us.cc" class="back-btn">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+      MateFinder
+    </a>
+  </div>
+</header>
+
+<!-- LANDING -->
+<div id="landing">
+  <div class="landing-glow"></div>
+  <div class="landing-glow2"></div>
+  <div class="tag-pill"><span class="tag-dot"></span>Live · Random · Real People</div>
+  <h1 class="landing-title">Talk to a <span class="hl">Stranger</span><br/>Right Now</h1>
+  <p class="landing-sub">Random video chat — no algorithms, no filters. Just real people from anywhere.</p>
+  <button class="start-btn" onclick="startTV()">
+    ▶ &nbsp;Start Video Chat
+  </button>
+  <div class="feat-grid">
+    <div class="feat-item">📹 HD Video</div>
+    <div class="feat-item">🎙️ Clear Audio</div>
+    <div class="feat-item">⚡ Instant Match</div>
+    <div class="feat-item">🌍 Global</div>
+    <div class="feat-item">🔒 Anonymous</div>
+  </div>
+  <div class="guest-note" id="guest-note">
+    No account needed &nbsp;·&nbsp;
+    <a href="https://matefinder-in.us.cc/register">Sign up on MateFinder</a> to show your profile
+  </div>
+</div>
+<!-- ↑ #landing এখানেই শেষ -->
+
+<!-- PRIVACY -->
+<section id="privacy" style="max-width:800px;margin:80px auto;padding:0 1.5rem;font-size:14px;line-height:1.7;position:relative;z-index:1;">
+  <h2 style="font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800;margin-bottom:1rem;background:linear-gradient(135deg,var(--accent),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Privacy Policy</h2>
+  <p style="color:var(--muted);margin-bottom:.8rem">MyMate-TV does not store video chats. Conversations are peer-to-peer and temporary.</p>
+  <p style="color:var(--muted);margin-bottom:.8rem">We may collect minimal technical data such as IP address for abuse prevention and service improvement.</p>
+  <p style="color:var(--muted)">By using this service you agree that chats may be monitored to keep the platform safe.</p>
+</section>
+
+<!-- TERMS -->
+<section id="terms" style="max-width:800px;margin:60px auto 80px;padding:0 1.5rem;font-size:14px;line-height:1.7;position:relative;z-index:1;">
+  <h2 style="font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800;margin-bottom:1rem;background:linear-gradient(135deg,var(--accent),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Terms of Service</h2>
+  <p style="color:var(--muted);margin-bottom:.8rem">You must be at least 18 years old to use MyMate-TV.</p>
+  <p style="color:var(--muted);margin-bottom:.8rem">Users must not share illegal content, harassment, nudity, or harmful behavior.</p>
+  <p style="color:var(--muted)">Violation of these rules may result in immediate banning from the platform.</p>
+</section>
+
+<!-- FOOTER -->
+<div class="landing-footer" style="margin-top:50px;font-size:13px;opacity:0.85;text-align:center;line-height:1.8;">
+  <br>
+  © 2026 MyMate-TV by
+  <a href="https://matefinder-in.us.cc" target="_blank" rel="noopener">MateFinder</a>. All rights reserved.
+  <br>
+  Made with ❤️ for connecting real people around the world.
+</div>
+
+<!-- TV ROOM -->
+<div id="tv-room">
+  <div class="videos-wrap" id="videos-wrap">
+    <!-- remote -->
+    <div class="vid-box" id="remote-box">
+      <div class="vid-ph" id="remote-ph">
+        <div class="vid-ph-icon">👤</div>
+        <div class="vid-ph-text">STRANGER</div>
+      </div>
+      <video id="remote-vid" autoplay playsinline style="display:none"></video>
+      <div class="vid-label" id="stranger-label">Stranger</div>
+      <div class="waiting-overlay" id="waiting-overlay">
+        <div class="waiting-ring"></div>
+        <div class="waiting-text" id="waiting-text">FINDING SOMEONE…</div>
+      </div>
+    </div>
+    <!-- local -->
+    <div class="vid-box">
+      <video id="local-vid" autoplay playsinline muted></video>
+      <div class="vid-label" id="local-label">You</div>
+    </div>
+  </div>
+
+  <!-- status -->
+  <div class="status-bar">
+    <div class="status-indicator">
+      <div class="status-dot searching" id="status-dot"></div>
+      <span id="status-text">Connecting…</span>
+    </div>
+    <div class="timer-display" id="timer-display"></div>
+  </div>
+
+  <!-- chat -->
+  <div class="chat-panel">
+    <div class="chat-msgs" id="chat-msgs"></div>
+    <div class="chat-input-row">
+      <input class="chat-input" id="chat-input" placeholder="say something…" maxlength="200"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();sendChat()}"/>
+      <button class="chat-send-btn" onclick="sendChat()">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- controls -->
+  <div class="controls">
+    <button class="ctrl-btn" id="mute-btn" onclick="toggleMute()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+      Mute
+    </button>
+    <button class="ctrl-btn" id="cam-btn" onclick="toggleCam()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+      Cam
+    </button>
+    <button class="ctrl-btn ctrl-next" onclick="nextStranger()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/><polyline points="15 18 21 12 15 6"/></svg>
+      Next
+    </button>
+    <button class="ctrl-btn ctrl-end" onclick="stopTV()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      Stop
+    </button>
+  </div>
+</div>
+
+<!-- AGE GATE -->
+<div id="age-gate">
+  <div class="age-card">
+    <div class="age-icon">🔞</div>
+    <div class="age-title">Are you 18 or older?</div>
+    <div class="age-sub">MyMate-TV is intended for adults only.<br/>You must be at least 18 years old to continue.</div>
+    <div class="age-btns">
+      <button class="age-yes" onclick="ageConfirm(true)">✓ Yes, I'm 18+</button>
+      <button class="age-no" onclick="ageConfirm(false)">No</button>
+    </div>
+  </div>
+</div>
+
+<audio id="remote-audio" autoplay playsinline style="display:none"></audio>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ══════════════════════════════════
+   CONFIG — same backend as MateFinder
+══════════════════════════════════ */
+const API_URL  = 'https://matefinder.onrender.com';
+const SB_URL   = 'https://rdhbqcysmcggzmxlngiv.supabase.co';
+const SB_ANON  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkaGJxY3lzbWNnZ3pteGxuZ2l2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyODg2MzUsImV4cCI6MjA4Nzg2NDYzNX0.yF59Gsh2tqcXZaNixCd636ChsUWeONvqE8wDiYWzbaQ';
+const TV_WS    = API_URL.replace(/^http/,'ws') + '/tv';
+
+const ICE_SERVERS = {
+  iceServers: [
+    // STUN servers (fast direct connection)
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    // ExpressTURN (primary TURN)
+    {
+      urls: 'turn:free.expressturn.com:3478?transport=udp',
+      username: '000000002088271531',
+      credential: 'HNVWF4R9rsFmjfNjtaxe6PENc2c='
+    },
+    {
+      urls: 'turn:free.expressturn.com:3478?transport=tcp',
+      username: '000000002088271531',
+      credential: 'HNVWF4R9rsFmjfNjtaxe6PENc2c='
+    },
+    // OpenRelay (backup TURN)
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turns:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    // Metered global (extra backup)
+    {
+      urls: 'turn:global.relay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turn:global.relay.metered.ca:80?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turn:global.relay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turns:global.relay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+  ],
+  iceCandidatePoolSize: 10,
+};
+/* ══ STATE ══ */
+const { createClient } = supabase;
+const sb = createClient(SB_URL, SB_ANON);
+
+let me = null, myP = null, myToken = null;
+let tvState = 'idle';
+let localStream = null, peerConn = null, tvSocket = null;
+let partnerId = null, myId = null;
+let isMuted = false, isCamOff = false;
+let iceBuf = [];
+let timerInterval = null, connectedAt = 0;
+
+/* ══ INIT ══ */
+async function init() {
+  setTimeout(() => {
+    const sp = document.getElementById('splash');
+    sp.classList.add('out');
+    setTimeout(() => sp.style.display='none', 500);
+  }, 1600);
+
+  // Check if MateFinder user
+  try {
+    const { data:{ session } } = await sb.auth.getSession();
+    if (session) {
+      me = session.user; myToken = session.access_token;
+      const { data: p } = await sb.from('profiles').select('*').eq('user_id', me.id).single();
+      myP = p;
+      updateUserChip();
+      document.getElementById('guest-note').style.display = 'none';
+    }
+  } catch(e) {}
+
+  myId = me?.id || ('guest_' + Math.random().toString(36).slice(2,10));
+  fetchOnlineCount();
+  setInterval(fetchOnlineCount, 15000);
+}
+
+async function fetchOnlineCount() {
+  try {
+    const r = await fetch(API_URL + '/tv/online');
+    const d = await r.json();
+    document.getElementById('online-count').textContent = (d.count||0) + ' online';
+  } catch(e) {}
+}
+
+function updateUserChip() {
+  if (!myP) return;
+  const wrap = document.getElementById('user-chip-wrap');
+  wrap.innerHTML = `<div class="user-chip">
+    ${myP.photo_url
+      ? `<img class="user-av" src="${esc(myP.photo_url)}" alt=""/>`
+      : `<div class="user-av-ph">👤</div>`}
+    <span style="font-size:.73rem;color:rgba(240,240,248,.7)">${esc(myP.name)}</span>
+  </div>`;
+}
+
+/* ══ START ══ */
+async function startTV() {
+    if (!sessionStorage.getItem('age_ok')) {
+    document.getElementById('age-gate').classList.add('show');
+    return;
+    }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    return showPermError('Camera not supported in this browser. Try Chrome or Safari.');
+  }
+
+  document.getElementById('landing').style.display = 'none';
+  document.getElementById('privacy').style.display = 'none';
+  document.getElementById('terms').style.display = 'none';
+  document.querySelector('.landing-footer').style.display = 'none';
+  document.getElementById('tv-room').classList.add('open');
+  setStatus('searching', 'Starting camera…');
+
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode:'user', width:{ideal:640}, height:{ideal:480} },
+      audio: { echoCancellation:true, noiseSuppression:true }
+    });
+  } catch(e) {
+    showPermErrorInRoom(e.message);
+    return;
+  }
+
+  const localVid = document.getElementById('local-vid');
+  localVid.srcObject = localStream;
+  localVid.play().catch(()=>{});
+
+  // Update local label
+  const localLabel = document.getElementById('local-label');
+  localLabel.textContent = myP ? myP.name : 'You (Guest)';
+
+  connectWS();
+}
+
+function showPermError(msg) {
+  document.getElementById('landing').innerHTML = `
+    <div class="perm-screen">
+      <div class="perm-icon">🚫</div>
+      <div class="perm-title">Not Supported</div>
+      <div class="perm-sub">${msg}</div>
+    </div>`;
+}
+
+function showPermErrorInRoom(msg) {
+  document.getElementById('videos-wrap').innerHTML = `
+    <div class="perm-screen" style="grid-column:1/-1">
+      <div class="perm-icon">🎥</div>
+      <div class="perm-title">Camera Access Needed</div>
+      <div class="perm-sub">Allow camera & microphone, then try again.<br><br><small style="opacity:.5">${msg}</small></div>
+      <button class="perm-btn" onclick="location.reload()">🔄 Try Again</button>
+    </div>`;
+}
+
+/* ══ WEBSOCKET ══ */
+function connectWS() {
+  if (tvSocket) { try { tvSocket.close(); } catch(e){} }
+  iceBuf = [];
+  const name  = myP?.name     || 'Guest';
+  const photo = myP?.photo_url || '';
+  tvSocket = new WebSocket(`${TV_WS}?user_id=${myId}&name=${encodeURIComponent(name)}&photo=${encodeURIComponent(photo)}`);
+  tvSocket.onopen  = () => { tvState = 'waiting'; setStatus('searching', 'Finding someone…'); showWaiting(true, 'FINDING SOMEONE…'); };
+  tvSocket.onmessage = async ({data}) => { try { await handleMsg(JSON.parse(data)); } catch(e){ console.error(e); } };
+  tvSocket.onclose = () => { if (tvState !== 'idle') { setStatus('searching','Reconnecting…'); setTimeout(connectWS, 2000); } };
+  tvSocket.onerror = () => tvSocket.close();
+}
+
+async function handleMsg(msg) {
+  switch(msg.type) {
+    case 'waiting':
+      setStatus('searching', msg.message || 'Finding someone…');
+      showWaiting(true, 'FINDING SOMEONE…');
+      break;
+
+    case 'matched':
+      partnerId = msg.partner_id;
+      iceBuf = [];
+      tvState = 'connected';
+      showWaiting(false);
+      setStatus('connected', 'Connected · ' + (msg.partner_name || 'Stranger'));
+      document.getElementById('stranger-label').textContent = msg.partner_name || 'Stranger';
+      addChat('system', `Now chatting with ${msg.partner_name || 'a stranger'} — say hi! 👋`);
+      startTimer();
+      if (msg.initiator) await createOffer();
+      break;
+
+    case 'signal':
+      await handleSignal(msg.signal);
+      break;
+
+    case 'chat':
+      addChat('them', msg.content, msg.name || 'Stranger');
+      break;
+
+    case 'partner_left':
+      addChat('system', 'Stranger disconnected.');
+      setStatus('searching', 'Partner left — click Next');
+      tvState = 'waiting';
+      partnerId = null;
+      stopTimer();
+      cleanupPeer();
+      showWaiting(true, 'CLICK NEXT TO CONTINUE');
+      const rv = document.getElementById('remote-vid');
+      if (rv) { try { rv.srcObject = null; } catch(e){} rv.style.display='none'; }
+      document.getElementById('remote-ph').style.display='flex';
+      const ra = document.getElementById('remote-audio');
+      if (ra) { try { ra.srcObject = null; } catch(e){} }
+      break;
+
+    case 'online_count':
+      document.getElementById('online-count').textContent = (msg.count||0) + ' online';
+      break;
+  }
+}
+
+/* ══ WEBRTC ══ */
+function buildPeer() {
+  cleanupPeer();
+  iceBuf = [];
+  const capturedPartnerId = partnerId;
+  const pc = new RTCPeerConnection(ICE_SERVERS);
+
+  pc.ontrack = (e) => {
+    const stream = e.streams[0] || new MediaStream([e.track]);
+    if (e.track.kind === 'video') {
+      const tryVid = (n=0) => {
+        const el = document.getElementById('remote-vid');
+        if (el) {
+          el.srcObject = stream; el.style.display='block'; el.play().catch(()=>{});
+          document.getElementById('remote-ph').style.display='none';
+          showWaiting(false);
+        } else if (n < 20) setTimeout(()=>tryVid(n+1), 200);
+      };
+      tryVid();
+    } else if (e.track.kind === 'audio') {
+      const tryAudio = (n=0) => {
+        const el = document.getElementById('remote-audio');
+        if (el) {
+          try {
+            if (el.srcObject) { try { el.srcObject.addTrack(e.track); } catch(_) { el.srcObject = stream; } }
+            else el.srcObject = stream;
+            el.play().catch(err => console.warn('audio play:', err));
+          } catch(err) { if (n<5) setTimeout(()=>tryAudio(n+1),300); }
+        } else if (n < 10) setTimeout(()=>tryAudio(n+1), 200);
+      };
+      tryAudio();
+    }
+  };
+
+  pc.onicecandidate = (e) => {
+    if (!e.candidate) return;
+    const target = capturedPartnerId || partnerId;
+    if (!target) return;
+    if (tvSocket?.readyState === 1) {
+      tvSocket.send(JSON.stringify({ type:'signal', to:target, signal:{ type:'candidate', candidate:e.candidate.toJSON() } }));
+    }
+  };
+
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'connected') {
+      setStatus('connected', 'Connected · ' + (document.getElementById('stranger-label').textContent || 'Stranger'));
+    } else if (pc.connectionState === 'failed') {
+      setStatus('searching','Connection failed — try Next');
+      if (pc.restartIce) pc.restartIce();
+    }
+  };
+
+  peerConn = pc;
+  return pc;
+}
+
+async function createOffer() {
+  const pid = partnerId;
+  if (!pid || !localStream) return;
+  const pc = buildPeer();
+  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  try {
+    const offer = await pc.createOffer({ offerToReceiveAudio:true, offerToReceiveVideo:true });
+    await pc.setLocalDescription(offer);
+    await waitIce(pc, 3000);
+    if (tvSocket?.readyState === 1) {
+      tvSocket.send(JSON.stringify({ type:'signal', to:pid, signal:{ type:'offer', sdp:pc.localDescription.sdp } }));
+    }
+  } catch(e) { console.error('createOffer:', e); }
+}
+
+async function handleSignal(signal) {
+  if (signal.type === 'offer') {
+    const pid = partnerId;
+    if (!pid || !localStream) return;
+    const pc = buildPeer();
+    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+    try {
+      await pc.setRemoteDescription({ type:'offer', sdp:signal.sdp });
+      for (const c of iceBuf) await pc.addIceCandidate(c).catch(()=>{});
+      iceBuf = [];
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await waitIce(pc, 3000);
+      if (tvSocket?.readyState === 1) {
+        tvSocket.send(JSON.stringify({ type:'signal', to:pid, signal:{ type:'answer', sdp:pc.localDescription.sdp } }));
+      }
+    } catch(e) { console.error('handleSignal offer:', e); }
+
+  } else if (signal.type === 'answer') {
+    if (!peerConn || peerConn.signalingState === 'stable') return;
+    try {
+      await peerConn.setRemoteDescription({ type:'answer', sdp:signal.sdp });
+      for (const c of iceBuf) await peerConn.addIceCandidate(c).catch(()=>{});
+      iceBuf = [];
+    } catch(e) { console.error('handleSignal answer:', e); }
+
+  } else if (signal.type === 'candidate') {
+    if (!signal.candidate) return;
+    try {
+      const ice = new RTCIceCandidate(signal.candidate);
+      if (peerConn?.remoteDescription) await peerConn.addIceCandidate(ice);
+      else iceBuf.push(ice);
+    } catch(e) {}
+  }
+}
+
+function waitIce(pc, ms=3000) {
+  return new Promise(r => {
+    if (pc.iceGatheringState === 'complete') { r(); return; }
+    const check = () => { if (pc.iceGatheringState === 'complete') { pc.removeEventListener('icegatheringstatechange', check); r(); } };
+    pc.addEventListener('icegatheringstatechange', check);
+    setTimeout(r, ms);
+  });
+}
+
+function cleanupPeer() {
+  if (peerConn) {
+    peerConn.ontrack = null; peerConn.onicecandidate = null; peerConn.onconnectionstatechange = null;
+    try { peerConn.close(); } catch(e){}
+    peerConn = null;
+  }
+}
+
+/* ══ CONTROLS ══ */
+function nextStranger() {
+  if (tvSocket?.readyState === 1) tvSocket.send(JSON.stringify({ type:'next' }));
+  cleanupPeer(); iceBuf = []; partnerId = null; tvState = 'waiting';
+  stopTimer();
+  showWaiting(true, 'FINDING NEXT…');
+  setStatus('searching', 'Finding next match…');
+  const rv = document.getElementById('remote-vid');
+  if (rv) { try { rv.srcObject=null; } catch(e){} rv.style.display='none'; }
+  document.getElementById('remote-ph').style.display='flex';
+  document.getElementById('stranger-label').textContent = 'Stranger';
+  const ra = document.getElementById('remote-audio');
+  if (ra) { try { ra.srcObject=null; } catch(e){} }
+  const msgs = document.getElementById('chat-msgs');
+  if (msgs) { msgs.innerHTML=''; addChat('system','Looking for a new stranger…'); }
+}
+
+function stopTV() {
+  tvState = 'idle'; partnerId = null; iceBuf = [];
+  stopTimer();
+  if (tvSocket?.readyState===1) tvSocket.send(JSON.stringify({type:'leave'}));
+  cleanupPeer();
+  if (tvSocket) { tvSocket.onclose=null; try{tvSocket.close();}catch(e){} tvSocket=null; }
+  if (localStream) { localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
+  const ra = document.getElementById('remote-audio');
+  if (ra) { try{ra.srcObject=null;}catch(e){} }
+  document.getElementById('tv-room').classList.remove('open');
+  document.getElementById('landing').style.display='flex';
+  document.getElementById('privacy').style.display = 'block';
+  document.getElementById('terms').style.display = 'block';
+  document.querySelector('.landing-footer').style.display = 'block';
+}
+
+function toggleMute() {
+  if (!localStream) return; isMuted = !isMuted;
+  localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
+  document.getElementById('mute-btn').classList.toggle('active', isMuted);
+}
+
+function toggleCam() {
+  if (!localStream) return; isCamOff = !isCamOff;
+  localStream.getVideoTracks().forEach(t => t.enabled = !isCamOff);
+  document.getElementById('cam-btn').classList.toggle('active', isCamOff);
+}
+
+/* ══ CHAT ══ */
+function sendChat() {
+  const inp = document.getElementById('chat-input'); if (!inp) return;
+  const txt = inp.value.trim(); if (!txt) return;
+  inp.value = '';
+  if (tvSocket?.readyState===1 && tvState==='connected') {
+    tvSocket.send(JSON.stringify({type:'chat', content:txt}));
+    addChat('me', txt, myP?.name||'You');
+  } else toast('⚠️ Not connected yet');
+}
+
+function addChat(role, text, name='') {
+  const msgs = document.getElementById('chat-msgs'); if (!msgs) return;
+  const div = document.createElement('div');
+  if (role === 'system') {
+    div.className = 'chat-msg system'; div.textContent = text;
+  } else {
+    div.className = 'chat-msg';
+    div.innerHTML = `<span class="msg-name ${role}">${esc(name||'')}</span>${esc(text)}`;
+  }
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+/* ══ TIMER ══ */
+function startTimer() {
+  stopTimer(); connectedAt = Date.now();
+  timerInterval = setInterval(() => {
+    const s = Math.floor((Date.now()-connectedAt)/1000);
+    document.getElementById('timer-display').textContent =
+      Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
+  }, 1000);
+}
+function stopTimer() {
+  clearInterval(timerInterval); timerInterval=null; connectedAt=0;
+  document.getElementById('timer-display').textContent='';
+}
+
+/* ══ UI HELPERS ══ */
+function setStatus(type, text) {
+  document.getElementById('status-text').textContent = text;
+  const dot = document.getElementById('status-dot');
+  dot.className = 'status-dot ' + type;
+}
+function showWaiting(show, text='') {
+  const ov = document.getElementById('waiting-overlay');
+  if (!ov) return;
+  ov.style.display = show ? 'flex' : 'none';
+  if (text) document.getElementById('waiting-text').textContent = text;
+}
+/* ══ AGE GATE ══ */
+function ageConfirm(yes) {
+  document.getElementById('age-gate').classList.remove('show');
+  if (yes) {
+    sessionStorage.setItem('age_ok', '1');
+    startTV();
+  } else {
+    window.location.href = 'https://matefinder-in.us.cc';
+  }
+}
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+let _tt;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(_tt); _tt = setTimeout(()=>t.classList.remove('show'), 2500);
+}
+
+init();
+</script>
+</body>
+</html>
